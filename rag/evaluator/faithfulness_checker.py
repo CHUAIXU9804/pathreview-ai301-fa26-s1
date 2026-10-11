@@ -63,7 +63,7 @@ class FaithfulnessChecker:
         """
         # Split by sentence (simple regex)
         sentences = re.split(r"[.!?]+", text)
-        claims = [s.strip() for s in sentences if s.strip() and len(s.strip()) > 10]
+        claims = [s.strip() for s in sentences if s.strip() and len(s.strip()) >= 3]
         return claims[:10]  # Limit to 10 claims for scoring
 
     @staticmethod
@@ -78,8 +78,8 @@ class FaithfulnessChecker:
             True if claim is supported
         """
         # Tokenize and check for keyword overlap
-        claim_tokens = set(claim.lower().split())
-        context_tokens = set(context.lower().split())
+        claim_tokens = set(re.findall(r"\w+", claim.lower()))
+        context_tokens = set(re.findall(r"\w+", context.lower()))
 
         # Require at least some meaningful overlap
         overlap = claim_tokens & context_tokens
@@ -105,4 +105,8 @@ class FaithfulnessChecker:
         }
         meaningful_overlap = overlap - stop_words
 
-        return len(meaningful_overlap) >= 2
+        # Short claims have few content words, so a single match is enough for them
+        claim_content_words = claim_tokens - stop_words
+        required_overlap = 1 if len(claim_content_words) <= 3 else 2
+
+        return len(meaningful_overlap) >= required_overlap

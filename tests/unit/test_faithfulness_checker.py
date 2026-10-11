@@ -70,7 +70,7 @@ class TestFaithfulnessChecker:
     def test_empty_context_chunks_returns_zero(self, checker):
         """Test empty context chunks returns 0.0."""
         feedback = "Some feedback"
-        context_chunks = []
+        context_chunks: list[dict] = []
 
         score = checker.check(feedback, context_chunks)
 
@@ -79,16 +79,12 @@ class TestFaithfulnessChecker:
     def test_both_empty_returns_zero(self, checker):
         """Test both empty returns 0.0."""
         feedback = ""
-        context_chunks = []
+        context_chunks: list[dict] = []
 
         score = checker.check(feedback, context_chunks)
 
         assert score == 0.0
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="issue #59: faithfulness checker can never mark short claims as supported",
-    )
     def test_multiple_context_chunks(self, checker):
         """Test multiple context chunks contribute to score."""
         feedback = "The developer has Python, JavaScript, and Docker experience."
@@ -166,10 +162,6 @@ class TestFaithfulnessChecker:
         # First should be higher
         assert score1 > score2
 
-    @pytest.mark.xfail(
-        strict=True,
-        reason="issue #59: faithfulness checker can never mark short claims as supported",
-    )
     def test_multiple_claims_varying_support(self, checker):
         """Test scoring with multiple claims of varying support."""
         feedback = "Python expert. Knows Rust. Skilled with Docker."
@@ -180,6 +172,34 @@ class TestFaithfulnessChecker:
         # Two claims supported, one not
         assert isinstance(score, float)
         assert 0.2 < score < 0.8
+
+    def test_is_supported_ignores_attached_punctuation(self, checker):
+        """Punctuation attached to claim words must not prevent matches (issue #59)."""
+        claim = "The developer has Python, JavaScript, and Docker experience"
+        context = "Python expertise. JavaScript skills; Docker and containers."
+
+        assert checker._is_supported(claim, context) is True
+
+    def test_is_supported_short_claim_with_one_matching_word(self, checker):
+        """A short claim with one matching content word is supported (issue #59)."""
+        assert checker._is_supported("Python expert", "Python projects in the portfolio") is True
+
+    def test_is_supported_short_claim_without_matching_word(self, checker):
+        """A short claim with no matching content word stays unsupported (issue #59)."""
+        assert checker._is_supported("Knows Rust", "Python and Docker expertise") is False
+
+    def test_is_supported_long_claim_needs_two_matching_words(self, checker):
+        """A long claim sharing only one generic word is not supported."""
+        claim = "This developer is an expert in Rust systems programming"
+        context = "The developer has Python and JavaScript experience"
+
+        assert checker._is_supported(claim, context) is False
+
+    def test_extract_claims_keeps_short_claims(self, checker):
+        """Short claims are kept instead of silently dropped (issue #59)."""
+        claims = checker._extract_claims("Python expert. Knows Rust.")
+
+        assert claims == ["Python expert", "Knows Rust"]
 
     def test_very_long_feedback(self, checker):
         """Test handling of very long feedback text."""
